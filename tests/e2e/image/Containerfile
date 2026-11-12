@@ -1,0 +1,20 @@
+# Throwaway SSH hosts for the end-to-end test: systemd as PID 1 (the roles reload services), an
+# ansible account with passwordless sudo, and the test key. The RHEL 8 family image keeps only
+# its own Python 3.6, so libre_devops.python has something to do.
+ARG BASE
+FROM ${BASE}
+ARG FAMILY
+ENV DEBIAN_FRONTEND=noninteractive
+RUN if [ "$FAMILY" = debian ]; then \
+      apt-get update && apt-get install -y --no-install-recommends systemd systemd-sysv openssh-server python3 sudo \
+      && rm -rf /var/lib/apt/lists/* && systemctl enable ssh; \
+    else \
+      dnf -y install openssh-server sudo && dnf clean all && systemctl enable sshd \
+      && echo 'Defaults !pam_acct_mgmt' > /etc/sudoers.d/no-acct-mgmt; \
+    fi \
+    && useradd -m -s /bin/bash ansible \
+    && echo 'ansible ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ansible \
+    && install -d -m 0700 -o ansible -g ansible /home/ansible/.ssh
+COPY --chown=ansible:ansible --chmod=0600 authorized_keys /home/ansible/.ssh/authorized_keys
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]
